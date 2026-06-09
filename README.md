@@ -1,6 +1,6 @@
 # ROVER-BASED-CROP-MONITORING-AND-DISEASE-PREDICTION-CABBAGE-PLANT-
 
-Traditional crop monitoring methods are time-consuming and often inaccurate, creating a 
+  Traditional crop monitoring methods are time-consuming and often inaccurate, creating a 
 need for smart agricultural solutions. This project proposes a Rover Based Crop Monitoring and 
 Disease Prediction System that uses an ESP32-CAM to capture real-time crop images and an 
 ESP32-S3 to collect environmental data such as temperature and humidity. The data is processed on 
