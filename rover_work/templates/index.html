@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rover Controller</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --bg: #0b0b0e; --card: rgba(22, 22, 29, 0.95); --accent: #ff4655; --green: #2ecc71; --border: rgba(255, 255, 255, 0.1); }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; margin: 0; display: grid; grid-template-columns: 320px 1fr 320px; height: 100vh; overflow: hidden; }
+        .glass { background: var(--card); backdrop-filter: blur(15px); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 8px 32px 0 rgba(0,0,0,0.8); }
+        .panel { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+        .video-container { position: relative; flex-grow: 1; background: #000; border-radius: 15px; border: 2px solid #333; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .video-feed { width: 100%; height: 100%; object-fit: contain; }
+        .live-tag { position: absolute; top: 20px; left: 20px; background: var(--accent); padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 0.8em; box-shadow: 0 0 15px var(--accent); display: none; z-index: 10;}
+        .stat-glow { text-align: center; border-bottom: 2px solid var(--green); padding-bottom: 10px; margin-bottom: 20px;}
+        .big-num { font-size: 2.5em; font-weight: 800; display: block; color: var(--green); }
+        .telem-row { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .control-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 220px; margin: 0 auto; }
+        .btn { background: #1e1e26; border: 1px solid #333; color: #fff; padding: 20px; border-radius: 10px; cursor: pointer; transition: 0.1s; text-align: center; font-weight: bold; }
+        .btn:active { background: var(--green); color: #000; transform: scale(0.95); }
+        .btn-stop { background: var(--accent) !important; color: white !important; }
+        .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; background: #444; }
+    </style>
+</head>
+<body>
+    <!-- Left Panel -->
+    <div class="panel">
+        <div class="glass">
+            <h2 style="font-size: 0.8em; letter-spacing: 2px; color: #888; margin:0 0 15px 0;">ANALYTICS</h2>
+            <div class="stat-glow"><small>TOTAL PLANTS</small><span class="big-num" id="tot">0</span></div>
+            <div class="stat-glow" style="border-color:var(--accent)"><small>BLIGHT DETECTED</small><span class="big-num" id="bli" style="color:var(--accent)">0</span></div>
+            <button class="btn" onclick="feat('reset')" style="width:100%">RESET COUNTER</button>
+        </div>
+        <div class="glass">
+            <h2 style="font-size: 0.8em; letter-spacing: 2px; color: #888; margin:0 0 15px 0;">VERIFICATION</h2>
+            <div id="upload-ui">
+                <input type="file" id="vidFile" accept="video/*" style="font-size: 0.7em; margin-bottom: 10px; width: 100%;">
+                <button class="btn" onclick="startTest()" style="width:100%; background:#27ae60">START AI TEST</button>
+            </div>
+            <div id="stop-ui" style="display:none;">
+                <button class="btn" onclick="stopTest()" style="width:100%; background:#e67e22">STOP & GO LIVE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Center Panel -->
+    <div class="panel">
+        <h1 style="text-align:center; color:var(--green); letter-spacing:2px; margin:0;">ROVER CONTROLLER</h1>
+        <div class="video-container">
+            <div class="live-tag" id="live-indicator">LIVE FEED</div>
+            <img src="/video_feed" class="video-feed">
+        </div>
+        <div class="glass" style="text-align:center; display: flex; gap: 10px; justify-content: center;">
+            <button class="btn" id="ai-btn" onclick="feat('toggle_ai')" style="min-width: 140px;">MODEL: ON</button>
+            <button class="btn" id="led-btn" onclick="feat('toggle_led')" style="min-width: 140px;">FLASH: OFF</button>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="panel">
+        <div class="glass">
+            <h2 style="font-size: 0.8em; letter-spacing: 2px; color: #888; margin:0 0 15px 0;">SYSTEM HEALTH</h2>
+            <div class="telem-row"><span><span class="status-dot" id="cam-dot"></span>CAM Module</span><span id="cam-txt">OFF</span></div>
+            <div class="telem-row"><span><span class="status-dot" id="s3-dot"></span>S3 Brain</span><span id="s3-txt">OFF</span></div>
+            <div class="telem-row"><span>Core Temp</span><span id="core-tmp">--</span></div>
+            <div class="telem-row"><span>Environment</span><span id="amb-tmp">--</span></div>
+            <div class="telem-row"><span>Humidity</span><span id="hum">--</span></div>
+            <div class="telem-row"><span>Distance</span><span id="dst">--</span></div>
+        </div>
+        <div class="glass" style="flex-grow:1;">
+            <h2 style="font-size: 0.8em; letter-spacing: 2px; color: #888; margin:0 0 15px 0;">CONTROLS</h2>
+            <div class="control-grid">
+                <div></div><button class="btn" onmousedown="nav('FORWARD')" onmouseup="nav('STOP')">↑</button><div></div>
+                <button class="btn" onmousedown="nav('LEFT')" onmouseup="nav('STOP')">←</button>
+                <button class="btn btn-stop" onclick="nav('STOP')">■</button>
+                <button class="btn" onmousedown="nav('RIGHT')" onmouseup="nav('STOP')">→</button>
+                <div></div><button class="btn" onmousedown="nav('BACKWARD')" onmouseup="nav('STOP')">↓</button><div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function nav(c) { fetch('/set_cmd?cmd=' + c); }
+
+        function feat(f) {
+            fetch('/set_feature?feat=' + f)
+            .then(r => r.json())
+            .then(data => {
+                if(f === 'toggle_led') document.getElementById('led-btn').innerText = "FLASH: " + (data.led == "LED_ON" ? "ON" : "OFF");
+                if(f === 'toggle_ai') document.getElementById('ai-btn').innerText = "MODEL: " + (data.ai ? "ON" : "OFF");
+            });
+        }
+
+        function startTest() {
+            let file = document.getElementById('vidFile').files[0];
+            if(!file) return alert("Select a video!");
+            let formData = new FormData();
+            formData.append('video_file', file);
+            fetch('/upload_test_video', {method: 'POST', body: formData})
+            .then(() => {
+                document.getElementById('upload-ui').style.display = 'none';
+                document.getElementById('stop-ui').style.display = 'block';
+            });
+        }
+
+        function stopTest() { fetch('/stop_test'); }
+
+        setInterval(() => {
+            fetch('/get_data').then(r => r.json()).then(d => {
+                const t = d.telemetry;
+                document.getElementById('core-tmp').innerText = t.core_temp.toFixed(1) + "°C";
+                document.getElementById('amb-tmp').innerText = t.amb_temp.toFixed(1) + "°C";
+                document.getElementById('hum').innerText = t.hum.toFixed(1) + "%";
+                document.getElementById('dst').innerText = t.dist + " cm";
+                document.getElementById('tot').innerText = d.stats.total;
+                document.getElementById('bli').innerText = d.stats.blight;
+
+                // Status Logic
+                document.getElementById('cam-dot').style.backgroundColor = d.status.cam ? "#2ecc71" : "#e74c3c";
+                document.getElementById('cam-txt').innerText = d.status.cam ? "LIVE" : "OFF";
+                document.getElementById('cam-txt').style.color = d.status.cam ? "#2ecc71" : "#888";
+
+                document.getElementById('s3-dot').style.backgroundColor = d.status.s3 ? "#2ecc71" : "#e74c3c";
+                document.getElementById('s3-txt').innerText = d.status.s3 ? "LIVE" : "OFF";
+                document.getElementById('s3-txt').style.color = d.status.s3 ? "#2ecc71" : "#888";
+
+                document.getElementById('live-indicator').style.display = (d.status.cam && !d.is_test) ? "block" : "none";
+                document.getElementById('stop-ui').style.display = d.is_test ? "block" : "none";
+                document.getElementById('upload-ui').style.display = d.is_test ? "none" : "block";
+            }).catch(e => {});
+        }, 800);
+    </script>
+</body>
+</html>
+
+
+
+
+#./zrok2 share public http://localhost:5000 --backend-mode proxy
